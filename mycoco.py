@@ -5,7 +5,13 @@
 import sys
 
 # This is evil, forgive me, but practical under the circumstances.
-# It's a hardcoded access to the COCO API.  
+# It's a hardcoded access to the COCO API.
+from sre_parse import Tokenizer
+
+from keras import Model
+from keras.utils import to_categorical
+from keras_preprocessing.sequence import pad_sequences
+
 COCOAPI_PATH='/scratch/lt2316-h18-resources/cocoapi/PythonAPI/'
 TRAIN_ANNOT_FILE='/scratch/lt2316-h18-resources/coco/annotations/instances_train2017.json'
 VAL_ANNOT_FILE='/scratch/lt2316-h18-resources/coco/annotations/instances_val2017.json'
@@ -29,6 +35,7 @@ import random
 import skimage.io as io
 import skimage.transform as tform
 import numpy as np
+import keras
 
 def setmode(mode):
     '''
@@ -203,3 +210,92 @@ def iter_images(idlists, cats, size=(200,200), batch=1):
                     yield (np.array(images), np.array(labels))
                     images = []
                     labels = []
+
+
+def create_tokenizer() -> keras.preprocessing.text.Tokenizer:
+    """
+    Creates a tokenizer and fits it to the set of captions
+    :return:
+    """
+    # Find all captions
+    image_ids = annotcoco.getImgIds()
+    annotation_ids = capcoco.getAnnIds(imgIds=image_ids)
+    annotations = capcoco.loadAnns(annotation_ids)
+    captions = [annotation['caption'] for annotation in annotations]
+
+    # Create and fit tokenizer
+    tokenizer = keras.preprocessing.text.Tokenizer()
+    tokenizer.fit_on_texts(captions)
+    return tokenizer
+
+
+def get_max_caption_size() -> int:
+    """
+    Gets the length of the longest caption
+    """
+    image_ids = annotcoco.getImgIds()
+    annotation_ids = capcoco.getAnnIds(imgIds=image_ids)
+    annotations = capcoco.loadAnns(annotation_ids)
+    captions = [annotation['caption'] for annotation in annotations]
+    return max(map(lambda caption: len(caption), captions))
+
+
+def count_all_images():
+    """
+    Gets the total count of images available
+    """
+    return len(annotcoco.getImgIds())
+
+
+def iter_all_captions_images(tokenizer: keras.preprocessing.text.Tokenizer, encoder: Model, batch=32, size=(200,200)):
+    """
+    Creates an iterator for all images and captions.
+    Resizes and encodes images using the provided autoencoder.
+    Splits caption into all prefixes, followed by a single predicted word.
+    Batches generated output for both word and image predictions based on an array of word encodings.
+    :param tokenizer: Tokenizer to encode words
+    :param encoder: Autoencoder to encode images
+    :param batch: Size of produced batches
+    :param size: Required image size for autoencoder
+    :return: Generator for encoded captions and encoded images
+    """
+    # Find all ids
+    id_list = annotcoco.getImgIds()
+    max_caption_size = get_max_caption_size()
+    tokenizer_length = len(tokenizer.word_index)
+    while True:
+        # Determine random id order and reset batch
+        random_ids = random.sample(id_list, len(id_list))
+        captions = []
+        images = []
+        for image_id in random_ids:
+            # Parse image, make sure it is has 3 components
+            image = io.imread(imgdir + annotcoco.loadImgs(image_id)[0]['file_name'])
+            if not image.shape == (image.shape[0], image.shape[1], 3):
+                continue
+
+            # Encode the image
+            image = tform.resize(image, size)
+            image = encoder.predict(image[np.newaxis, :])[0]
+
+            # Encode the caption
+            annotation_id = capcoco.getAnnIds(imgIds=[image_id])[0]
+            annotation = capcoco.loadAnns(annotation_id)[0]
+            caption = tokenizer.texts_to_sequences([annotation['caption']])
+            caption = caption[0]
+
+            # Yield results for all caption prefixes
+            for i in range(1, len(caption)):
+                caption_prefix = caption[:i + 1]
+                images.append(image)
+                captions.append(caption_prefix)
+
+                # Yield a batch and reset lists
+                if len(images) % batch == 0:
+                    captions = np.array(pad_sequences(captions, maxlen=max_caption_size, padding='pre'))
+                    word_prefix = captions[:, :-1]
+                    word_prediction = to_categorical(captions[:, -1], num_classes=tokenizer_length)
+                    image_prediction = np.array(images)
+                    yield (word_prefix, {'word_prediction': word_prediction, 'image_prediction': image_prediction})
+                    captions = []
+                    images = []
