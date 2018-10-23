@@ -299,3 +299,34 @@ def iter_all_captions_images(tokenizer: keras.preprocessing.text.Tokenizer, enco
                     yield (word_prefix, {'word_prediction': word_prediction, 'image_prediction': image_prediction})
                     captions = []
                     images = []
+
+
+def get_all_encoded_images(encoder: Model, size=(200,200)):
+    """
+    Gets all image ids and encoded images
+    """
+    image_ids = []
+    images = []
+    for image_id in annotcoco.getImgIds():
+        # Parse image, make sure it is has 3 components
+        image = io.imread(imgdir + annotcoco.loadImgs(image_id)[0]['file_name'])
+        if not image.shape == (image.shape[0], image.shape[1], 3):
+            continue
+
+        # Encode the image
+        image = tform.resize(image, size)
+        image = encoder.predict(image[np.newaxis, :])[0]
+        image_ids.append(image_id)
+        images.append(image)
+
+    return image_ids, images
+
+
+def get_images(image_ids):
+    """
+    Load images with ids
+    """
+    for image_path in annotcoco.loadImgs(image_ids):
+        full_path = imgdir + image_path['file_name']
+        print(full_path)
+        yield io.imread(full_path)
