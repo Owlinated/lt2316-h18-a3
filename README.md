@@ -9,12 +9,17 @@ Florian Stellbrink
 
 ## Your notes
 
+This time I haven't added any unusual dependencies. Just matplotlib, keras, and sklearn.  
+Please use `python3.6`
+
 ### Running `train.py`
 
 This script expects three arguments.
-- The path to the pretrained autoenocder, e.g. /scratch/gusstefl/vanilla/model.h5
+- The path to the pretrained autoenocder, e.g. /scratch/gusstefl/pre_project/vanilla/model.h5
 - Folder for checkpoints, e.g. /scratch/gusstefl/a3
 - Output model file, e.g. /scratch/gusstefl/a3/model.h5
+
+Example: `python3.6 train.py /scratch/gusstefl/pre_project/vanilla/model.h5 /scratch/gusstefl/a3 /scratch/gusstefl/a3/model.h5`
 
 ### Running `prediction.py`
 
@@ -22,6 +27,8 @@ In addition to the usage specified in `HowToRun.py` you can call `sentence_predi
 
 This will predict the most likely five next words following the input. (*NOT* the five words that are most likely to appear int the next position like `predictive_search`!)  
 It will show likely images before and after predicting those five words.
+
+See `HowToRun.ipynb` for an example usage.
 
 ### Architecture
 
