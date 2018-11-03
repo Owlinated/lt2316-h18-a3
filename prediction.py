@@ -12,6 +12,14 @@
 from os import environ
 print("Disabling GPU")
 environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
+# Avoid no display exception of matplotlib when no display is set
+# https://stackoverflow.com/questions/37604289/tkinter-tclerror-no-display-name-and-no-display-environment-variable/43592515
+import matplotlib
+if environ.get('DISPLAY','') == '':
+    print('no display found. Using non-interactive Agg backend')
+    matplotlib.use('Agg')
+
 from pathlib import Path
 
 from keras import Model
